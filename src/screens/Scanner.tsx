@@ -69,14 +69,57 @@ export const BarcodeScanner = ({navigation}: Props) => {
       const photo = await cameraRef?.current?.takePhoto();
       if (!photo?.path) return;
 
-      const uri = `file://${photo.path}`;
-      const result = await TextRecognition.recognize(uri);
+      const imageResponse = await fetch(`file://${photo.path}`);
 
-      const items = parseReceiptBlocks(result.blocks);
-      console.log('Parsed items:', {result});
+      if (!imageResponse.ok) {
+        console.error('Failed to fetch image:', imageResponse.statusText);
+        return;
+      }
+
+      const blobData = await imageResponse.blob();
+      const base64Data = await blobToBase64(blobData);
+      const apiLink = 'to-be-env-value';
+
+      console.log({base64Data});
+      const response = await fetch(apiLink, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json', // Ensure content type is JSON
+        },
+        body: JSON.stringify({image: base64Data}),
+      });
+
+      console.log({response, decoded: await response.json()});
     } catch (error) {
       console.error('Error capturing or recognizing text:', error);
     }
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const result = reader.result;
+        if (typeof result === 'string') {
+          // Log the full result for debugging
+          console.log('Base64 result:', result);
+
+          // Extract the Base64 string
+          const base64String = result.split(',')[1];
+          console.log('Base64 content:', base64String);
+          resolve(base64String);
+        } else {
+          reject(new Error('Failed to convert blob to base64 string'));
+        }
+      };
+
+      reader.onerror = () => {
+        reject(new Error('FileReader failed to read the blob'));
+      };
+
+      reader.readAsDataURL(blob);
+    });
   };
 
   // Function to parse text blocks for products and prices
@@ -118,6 +161,7 @@ export const BarcodeScanner = ({navigation}: Props) => {
           enableZoomGesture={true}
           ref={cameraRef}
           photo={true}
+          pixelFormat="yuv"
         />
       )}
       <Button title="Capture Receipt" onPress={onCapture} />
